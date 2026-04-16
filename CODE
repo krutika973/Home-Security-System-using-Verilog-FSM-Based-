@@ -1,0 +1,182 @@
+//Code
+module home_security_system (
+    input wire clk,
+    input wire reset,
+    input wire motion_sensor,
+    input wire door_sensor,
+    input wire window_sensor,
+    input wire [3:0] keypad,
+    input wire enter,
+    output reg alarm,
+    output reg armed
+);
+
+// Define the states for the FSM
+typedef enum logic [1:0] {
+    DISARMED = 2'b00,
+    ARMED = 2'b01,
+    ALARM_TRIGGERED = 2'b10
+} state_t;
+
+state_t current_state, next_state;
+
+// Define the correct keypad code
+parameter [3:0] correct_code = 4'b1010;
+
+// State transition and output logic
+always @(posedge clk or posedge reset) begin
+    if (reset) begin
+        current_state <= DISARMED;
+        alarm <= 1'b0;
+        armed <= 1'b0;
+    end else begin
+        current_state <= next_state;
+    end
+end
+
+// Next state logic
+always @(*) begin
+    next_state = current_state;
+    case (current_state)
+        DISARMED: begin
+            alarm = 1'b0;
+            armed = 1'b0;
+            if (enter && keypad == correct_code) begin
+                next_state = ARMED;
+            end
+        end
+        ARMED: begin
+            alarm = 1'b0;
+            armed = 1'b1;
+            if (motion_sensor || door_sensor || window_sensor) begin
+                next_state = ALARM_TRIGGERED;
+            end
+            if (enter && keypad == correct_code) begin
+                next_state = DISARMED;
+            end
+        end
+        ALARM_TRIGGERED: begin
+            alarm = 1'b1;
+            armed = 1'b1;
+            if (enter && keypad == correct_code) begin
+                next_state = DISARMED;
+            end
+        end
+        default: begin
+            next_state = DISARMED;
+        end
+    endcase
+end
+
+endmodule
+//Test Bench
+module home_security_system_tb;
+
+    // Inputs
+    reg clk;
+    reg reset;
+    reg motion_sensor;
+    reg door_sensor;
+    reg window_sensor;
+    reg [3:0] keypad;
+    reg enter;
+
+    // Outputs
+    wire alarm;
+    wire armed;
+
+    // Instantiate the Unit Under Test (UUT)
+    home_security_system uut (
+        .clk(clk),
+        .reset(reset),
+        .motion_sensor(motion_sensor),
+        .door_sensor(door_sensor),
+        .window_sensor(window_sensor),
+        .keypad(keypad),
+        .enter(enter),
+        .alarm(alarm),
+        .armed(armed)
+    );
+
+    // Clock generation
+    always #5 clk = ~clk; // 10ns clock period
+
+    initial begin
+        // Initialize Inputs
+        clk = 0;
+        reset = 0;
+        motion_sensor = 0;
+        door_sensor = 0;
+        window_sensor = 0;
+        keypad = 4'b0000;
+        enter = 0;
+
+        // Apply reset
+        #10 reset = 1;
+        #10 reset = 0;
+
+        // Test Case 1: Arm the system with correct code
+        #10 keypad = 4'b1010; enter = 1;
+        #10 enter = 0;
+
+        // Verify armed state
+        #20 if (armed !== 1) $display("Test Case 1 Failed");
+
+        // Test Case 2: Trigger the alarm with motion sensor
+        #10 motion_sensor = 1;
+        #10 if (alarm !== 1) $display("Test Case 2 Failed");
+        #10 motion_sensor = 0;
+
+        // Test Case 3: Disarm the system with correct code
+        #10 keypad = 4'b1010; enter = 1;
+        #10 enter = 0;
+
+        // Verify disarmed state
+        #20 if (armed !== 0 || alarm !== 0) $display("Test Case 3 Failed");
+
+        // Test Case 4: Arm the system again
+        #10 keypad = 4'b1010; enter = 1;
+        #10 enter = 0;
+
+        // Test Case 5: Trigger the alarm with door sensor
+        #10 door_sensor = 1;
+        #10 if (alarm !== 1) $display("Test Case 5 Failed");
+        #10 door_sensor = 0;
+
+        // Test Case 6: Disarm the system again
+        #10 keypad = 4'b1010; enter = 1;
+        #10 enter = 0;
+
+        // Verify disarmed state
+        #20 if (armed !== 0 || alarm !== 0) $display("Test Case 6 Failed");
+
+        // Test Case 7: Arm the system once more
+        #10 keypad = 4'b1010; enter = 1;
+        #10 enter = 0;
+
+        // Test Case 8: Trigger the alarm with window sensor
+        #10 window_sensor = 1;
+        #10 if (alarm !== 1) $display("Test Case 8 Failed");
+        #10 window_sensor = 0;
+
+        // Test Case 9: Disarm the system once more
+        #10 keypad = 4'b1010; enter = 1;
+        #10 enter = 0;
+
+        // Verify disarmed state
+        #20 if (armed !== 0 || alarm !== 0) $display("Test Case 9 Failed");
+
+        // Finish simulation
+        #10 $stop;
+    end
+  initial begin
+    $dumpfile("dump.vcd");
+    $dumpvars(1);
+  end
+
+endmodule
+
+
+
+
+
